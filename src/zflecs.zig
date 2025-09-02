@@ -3206,6 +3206,7 @@ pub fn IMPORT(world: *world_t, T: type) entity_t {
     const old_name_prefix = world_info.name_prefix;
 
     const path = flecs_module_path_from_c(@typeName(T));
+    defer EcsAllocator.free(@constCast(path));
     var e = ecs_lookup(world, path);
     if (e == 0) {
         // Load module
