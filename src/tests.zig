@@ -510,22 +510,28 @@ test "zflecs.struct-dtor-hook" {
     // commented out since the cleanup is never called to free the ArrayList
     // memory.
 }
-fn module(world: *ecs.world_t) callconv(.c) void {
-    var desc = ecs.component_desc_t{ .entity = 0, .type = .{ .size = 0, .alignment = 0 } };
-    _ = ecs.module_init(world, "SimpleModule", &desc);
 
-    ecs.COMPONENT(world, Position);
-    ecs.COMPONENT(world, Velocity);
+const TestModule = struct {
+    pub fn import(world: *ecs.world_t) void {
+        ecs.COMPONENT(world, Position);
+        ecs.COMPONENT(world, Velocity);
+        _ = ecs.ADD_SYSTEM(world, "move system", ecs.OnUpdate, move_system);
+    }
+};
+pub fn CStyleTestModule(world: *ecs.world_t) callconv(.c) void {
+    var desc = ecs.component_desc_t{ .entity = 0, .type = .{ .size = 0, .alignment = 0 } };
+
+    _ = ecs.module_init(world, @src().fn_name, &desc);
 }
 test "zflecs-module" {
     const world = ecs.init();
     defer _ = ecs.fini(world);
 
-    const module_id = ecs.import_c(world, module, "SimpleModule");
+    const import_entity = ecs.IMPORT(world, TestModule);
+    try expect(import_entity != 0);
 
-    try expect(module_id != 0);
-
-    _ = ecs.ADD_SYSTEM(world, "move system", ecs.OnUpdate, move_system);
+    const cstyle_import_entity  = ecs.import_c(world, CStyleTestModule, "CStyleTestModule");
+    try expect(cstyle_import_entity != 0);
 
     const bob = ecs.new_entity(world, "Bob");
     _ = ecs.set(world, bob, Position, .{ .x = 0, .y = 0 });

@@ -3184,10 +3184,50 @@ pub fn delete_children(world: *world_t, parent: entity_t) void {
 pub const import_c = ecs_import_c;
 extern fn ecs_import_c(world: *world_t, module: module_action_t, module_name_c: [*:0]const u8) entity_t;
 
+/// `pub fn import_c(world: *world_t, comptime module: type) entity_t`
+pub const import = ecs_import;
+extern fn ecs_import(world: *world_t, module: module_action_t, module_name_c: [*:0]const u8) entity_t;
+
 /// `pub fn module_init(world: *world_t, c_name: [*:0]const u8, desc: *component_desc_t) entity_t`
 pub const module_init = ecs_module_init;
 extern fn ecs_module_init(world: *world_t, c_name: [*:0]const u8, desc: *component_desc_t) entity_t;
 
+extern fn flecs_module_path_from_c([*:0]const u8) [*:0]const u8;
+
+pub fn IMPORT(world: *world_t, T: type) entity_t {
+    // type validation
+    if (!std.meta.hasMethod(T, "import")) {
+        const fmt = std.fmt.comptimePrint("Module {s} should be a Struct with a method import as:\n --- pub fn import (*world_t) void", .{@typeName(T)});
+        @compileError(fmt);
+    }
+    // ecs_import
+    const old_scope = ecs_set_scope(world, 0);
+    const world_info = ecs_get_world_info(world);
+    const old_name_prefix = world_info.name_prefix;
+
+    const path = flecs_module_path_from_c(@typeName(T));
+    var e = ecs_lookup(world, path);
+    if (e == 0) {
+        // Load module
+
+        var desc = component_desc_t{ .entity = id(T), .type = .{
+            .alignment = 0,
+            .size = 0,
+        } };
+        perTypeGlobalVarPtr(T).* = module_init(world, @typeName(T), &desc);
+        _ = ecs_set_scope(world, id(T));
+
+        T.import(world);
+
+        e = ecs_lookup(world, path);
+    }
+
+    // Restore to previous state
+    _ = ecs_set_scope(world, old_scope);
+    _ = set_name_prefix(world, old_name_prefix);
+
+    return e;
+}
 //--------------------------------------------------------------------------------------------------
 //
 // FLECS_META
