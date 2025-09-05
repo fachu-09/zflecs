@@ -1,6 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const builtin = @import("builtin");
+const World = @This();
 
 pub const flecs_version = std.SemanticVersion{
     .major = 4,
@@ -11,6 +12,8 @@ pub const flecs_version = std.SemanticVersion{
 // TODO: flecs_is_sanitize should come from flecs build flags.
 const flecs_is_sanitize = builtin.mode == .Debug;
 const flecs_is_debug = flecs_is_sanitize or builtin.mode == .Debug;
+
+world_ptr: *world_t,
 
 pub const ftime_t = f32;
 pub const size_t = i32;
@@ -291,7 +294,7 @@ pub var Observer: entity_t = undefined;
 pub var System: entity_t = undefined;
 pub var Flecs: entity_t = undefined;
 pub var FlecsCore: entity_t = undefined;
-pub var World: entity_t = undefined;
+pub var WorldE: entity_t = undefined;
 pub var Wildcard: entity_t = undefined;
 pub var Any: entity_t = undefined;
 pub var This: entity_t = undefined;
@@ -520,7 +523,9 @@ pub const system_desc_t = extern struct {
 };
 
 /// `pub fn system_init(world: *world_t, desc: *const system_desc_t) entity_t`
-pub const system_init = ecs_system_init;
+pub inline fn system_init(self: *const World, desc: *const system_desc_t) entity_t {
+    return ecs_system_init(self.world_t, desc);
+}
 extern fn ecs_system_init(world: *world_t, desc: *const system_desc_t) entity_t;
 
 pub const system_t = extern struct {
@@ -547,8 +552,10 @@ pub const system_t = extern struct {
     dtor: poly_dtor_t,
 };
 
-/// `pub fn system_get(world: *world_t, system: entity_t) *const system_t`
-pub const system_get = ecs_system_get;
+/// `pub fn system_get(world: *const World, system: entity_t) *const system_t`
+pub inline fn system_get(self: *const World, system_e: entity_t) *const system_t {
+    return ecs_system_get(self.world_t, system_e);
+}
 extern fn ecs_system_get(world: *world_t, system: entity_t) *const system_t;
 
 //--------------------------------------------------------------------------------------------------
@@ -1302,7 +1309,7 @@ fn flecs_abort() callconv(.c) noreturn {
 // Creation & Deletion
 //
 //--------------------------------------------------------------------------------------------------
-pub fn init() *world_t {
+pub fn init() !*World {
     if (builtin.os.tag == .windows) {
         os.ecs_os_api.abort_ = flecs_abort;
     }
@@ -1321,14 +1328,14 @@ pub fn init() *world_t {
 
     num_worlds += 1;
     component_ids_hm.ensureTotalCapacity(32) catch @panic("OOM");
-    const world = ecs_init();
+    const c_world = ecs_init();
 
     Query = EcsQuery;
     Observer = EcsObserver;
     System = EcsSystem;
     Flecs = EcsFlecs;
     FlecsCore = EcsFlecsCore;
-    World = EcsWorld;
+    WorldE = EcsWorld;
     Wildcard = EcsWildcard;
     Any = EcsAny;
     This = EcsThis;
@@ -1399,15 +1406,17 @@ pub fn init() *world_t {
 
     // TODO DefaultChildComponent = EcsDefaultChildComponent;
 
-    return world;
+    const r_world = try EcsAllocator.allocator.?.create(World);
+    r_world.world_ptr = c_world;
+    return r_world;
 }
 extern fn ecs_init() *world_t;
 
-pub fn fini(world: *world_t) i32 {
+pub fn fini(world: *World) !void {
     assert(num_worlds == 1);
     num_worlds -= 1;
 
-    const fini_result = ecs_fini(world);
+    const fini_result = ecs_fini(world.world_ptr);
 
     var it = component_ids_hm.iterator();
     while (it.next()) |kv| {
@@ -1416,22 +1425,29 @@ pub fn fini(world: *world_t) i32 {
     }
     component_ids_hm.clearRetainingCapacity();
 
+    EcsAllocator.allocator.?.destroy(world);
     if (num_worlds == 0) {
         _ = EcsAllocator.gpa.?.deinit();
         EcsAllocator.gpa = null;
         EcsAllocator.allocator = null;
     }
 
-    return fini_result;
+    if( fini_result != 0) {
+        return error_t;
+    }
 }
 extern fn ecs_fini(world: *world_t) i32;
 
-/// `pub fn is_fini(world: *const world_t) bool`
-pub const is_fini = ecs_is_fini;
+/// `pub fn is_fini(world: *const World) bool`
+pub inline fn is_fini(world: *const World) bool {
+    return ecs_is_fini(world.world_ptr);
+}
 extern fn ecs_is_fini(world: *const world_t) bool;
 
 /// `pub fn atfini(world: *world_t, action: fini_action_t, ctx: ?*anyopaque) bool`
-pub const atfini = ecs_atfini;
+pub inline fn atfini(world: *World, action: fini_action_t, ctx: ?*anyopaque) bool {
+    return ecs_atfini(world.world_ptr, action, ctx);
+}
 extern fn ecs_atfini(world: *world_t, action: fini_action_t, ctx: ?*anyopaque) bool;
 //--------------------------------------------------------------------------------------------------
 //
@@ -1439,35 +1455,51 @@ extern fn ecs_atfini(world: *world_t, action: fini_action_t, ctx: ?*anyopaque) b
 //
 //--------------------------------------------------------------------------------------------------
 /// `pub fn frame_begin(world: *world_t, delta_time: ftime_t) ftime_t`
-pub const frame_begin = ecs_frame_begin;
+pub inline fn frame_begin(world: *World, delta_time: ftime_t) ftime_t {
+    return ecs_frame_begin(world.world_ptr, delta_time);
+}
 extern fn ecs_frame_begin(world: *world_t, delta_time: ftime_t) ftime_t;
 
 /// `pub fn frame_end(world: *world_t) void`
-pub const frame_end = ecs_frame_end;
+pub inline fn frame_end(world: *World) void {
+    ecs_frame_end(world.world_ptr);
+}
 extern fn ecs_frame_end(world: *world_t) void;
 
 /// `pub fn run_post_frame(world: *world_t, action: fini_action_t, ctx: ?*anyopaque) void`
-pub const run_post_frame = ecs_run_post_frame;
+pub inline fn run_post_frame(world: *World, action: fini_action_t, ctx: ?*anyopaque) void {
+    ecs_run_post_frame(world.world_ptr, action, ctx);
+}
 extern fn ecs_run_post_frame(world: *world_t, action: fini_action_t, ctx: ?*anyopaque) void;
 
 /// `pub fn quit(world: *world_t) void`
-pub const quit = ecs_quit;
+pub inline fn quit(_: *World) void {
+    ecs_quit();
+}
 extern fn ecs_quit(world: *world_t) void;
 
 /// `pub fn should_quit(world: *const world_t) bool`
-pub const should_quit = ecs_should_quit;
+pub inline fn should_quit(world: *const World) bool {
+    return ecs_should_quit(world.world_ptr);
+}
 extern fn ecs_should_quit(world: *const world_t) bool;
 
 /// `pub fn measure_frame_time(world: *world_t, enable: bool) void`
-pub const measure_frame_time = ecs_measure_frame_time;
+pub inline fn measure_frame_time(world: *World, enabled: bool) void{
+    ecs_measure_system_time(world.world_ptr,enabled);
+}
 extern fn ecs_measure_frame_time(world: *world_t, enable: bool) void;
 
 /// `pub fn measure_system_time(world: *world_t, enable: bool) void`
-pub const measure_system_time = ecs_measure_system_time;
+pub inline fn measure_system_time (world: *World, enabled: bool) void {
+    ecs_measure_frame_time(world.world_ptr, enabled);
+}
 extern fn ecs_measure_system_time(world: *world_t, enable: bool) void;
 
 /// `pub fn set_target_fps(world: *world_t, fps: ftime_t) void`
-pub const set_target_fps = ecs_set_target_fps;
+pub inline fn set_target_fps(world: *World, fps: ftime_t) void {
+    ecs_set_target_fps(world.world_ptr, fps);
+}
 extern fn ecs_set_target_fps(world: *world_t, fps: ftime_t) void;
 //--------------------------------------------------------------------------------------------------
 //
@@ -1613,7 +1645,9 @@ pub fn pair_second(pair_id: entity_t) entity_t {
 //
 //--------------------------------------------------------------------------------------------------
 /// `pub fn new_id(world: *world_t) entity_t`
-pub const new_id = ecs_new;
+pub inline fn new_id(world: *World) entity_t {
+    return ecs_new(world.world_ptr);
+}
 extern fn ecs_new(world: *world_t) entity_t;
 
 /// `pub fn new_low_id(world: *world_t) entity_t`
@@ -2634,6 +2668,9 @@ extern fn ecs_using_task_threads(world: *world_t) bool;
 var num_worlds: u32 = 0;
 var component_ids_hm = std.AutoHashMap(*id_t, u0).init(std.heap.page_allocator);
 
+pub inline fn component(world: *World, comptime T: type) void {
+    COMPONENT(world.world_ptr,T);
+}
 pub fn COMPONENT(world: *world_t, comptime T: type) void {
     if (@sizeOf(T) == 0)
         @compileError("Size of the type must be greater than zero");
@@ -2667,6 +2704,10 @@ pub fn COMPONENT(world: *world_t, comptime T: type) void {
     });
 }
 
+pub inline fn tag(world: *World, comptime T: type) void {
+    TAG(world.world_ptr,T);
+}
+
 pub fn TAG(world: *world_t, comptime T: type) void {
     if (@sizeOf(T) != 0)
         @compileError("Size of the type must be zero");
@@ -2680,6 +2721,46 @@ pub fn TAG(world: *world_t, comptime T: type) void {
     type_id_ptr.* = ecs_entity_init(world, &.{ .name = typeName(T) });
 }
 
+const system_zdesc = struct {
+    name: ?[]const u8 = null,
+    callback: type,
+    phase: entity_t,
+    terms: []const struct {type, comptime inout_kind_t = .InOutDefault, comptime oper_kind_t = .And},
+
+    pub fn to_system_desc_t(self: @This()) system_desc_t {
+
+        comptime var terms: [self.terms.len]system_desc_t = undefined;
+        inline for (self.terms, 0..) |term, i| {
+            terms[i] = .{
+                .id = id(term.@"0"),
+                .inout = term.@"1",
+                .oper = term.@"2",
+            };
+        }
+        return .{
+            .callback = self.callback,
+            .query = .{
+                .terms = terms
+            }
+        };
+    }
+};
+//world.system(.{
+//    .name = "move",
+//    .callback = my_fn,
+//    .terms = .{
+//        .{*Position, .In},
+//        .{*const Velocity},
+//    }
+//})
+
+pub fn system(world: *World, desc: system_zdesc) void {
+    const name: [*:0]const u8 = if (desc.name == null) "" else std.fmt.comptimePrint("{s}", .{desc.name.?});
+    
+    const desc_t = desc.to_system_desc_t();
+    _ = SYSTEM(world.world_ptr, name, desc.phase, &desc_t);
+
+}
 pub fn SYSTEM(
     world: *world_t,
     name: [*:0]const u8,
