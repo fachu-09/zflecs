@@ -68,23 +68,23 @@ test "zflecs.entities.basics" {
 
     const bob = ecs.set_name(world.world_ptr, 0, "Bob");
 
-    _ = ecs.set(world.world_ptr, bob, Position, .{ .x = 10, .y = 20 });
-    ecs.add(world.world_ptr, bob, Walking);
+    _ = world.set(bob, Position, .{ .x = 10, .y = 20 });
+    world.add(bob, Walking);
 
-    const ptr = ecs.get(world.world_ptr, bob, Position).?;
+    const ptr = world.get(bob, Position).?;
     print("({d}, {d})\n", .{ ptr.x, ptr.y });
 
-    _ = ecs.set(world.world_ptr, bob, Position, .{ .x = 10, .y = 30 });
+    _ = world.set(bob, Position, .{ .x = 10, .y = 30 });
 
     const alice = ecs.set_name(world.world_ptr, 0, "Alice");
-    _ = ecs.set(world.world_ptr, alice, Position, .{ .x = 10, .y = 50 });
-    ecs.add(world.world_ptr, alice, Walking);
+    _ = world.set(alice, Position, .{ .x = 10, .y = 50 });
+    world.add(alice, Walking);
 
     const str = ecs.type_str(world.world_ptr, ecs.get_type(world.world_ptr, alice)).?;
     defer ecs.os.free(str);
     print("[{s}]\n", .{str});
 
-    ecs.remove(world.world_ptr, alice, Walking);
+    world.remove(alice, Walking);
 
     {
         var it = ecs.each(world.world_ptr, Position);
@@ -117,7 +117,7 @@ test "zflecs.entities.basics" {
         });
         defer ecs.query_fini(query);
 
-        var it = ecs.query_iter(world, query);
+        var it = ecs.query_iter(world.world_ptr, query);
         while (ecs.query_next(&it)) {
             for (it.entities()) |e| {
                 print("Filter loop: {s}\n", .{ecs.get_name(world.world_ptr, e).?});
@@ -130,7 +130,7 @@ test "zflecs.entities.basics" {
             var desc = ecs.query_desc_t{};
             desc.terms[0].id = ecs.id(Position);
             desc.terms[1].id = ecs.id(Walking);
-            break :_ try ecs.query_init(world, &desc);
+            break :_ try ecs.query_init(world.world_ptr, &desc);
         };
         defer ecs.query_fini(query);
     }
@@ -155,7 +155,7 @@ test "zflecs.basic" {
     print("\n", .{});
 
     const world = try ecs.init();
-    defer _ = ecs.fini(world.world_ptr);
+    defer ecs.fini(world) catch unreachable;
 
     try expect(ecs.is_fini(world) == false);
 
@@ -164,9 +164,9 @@ test "zflecs.basic" {
     const e0 = ecs.entity_init(world.world_ptr, &.{ .name = "aaa" });
     try expect(e0 != 0);
     try expect(ecs.is_alive(world.world_ptr, e0));
-    try expect(ecs.is_valid(world, e0));
+    try expect(ecs.is_valid(world.world_ptr, e0));
 
-    const e1 = ecs.new_id(world.world_ptr);
+    const e1 = world.new_id();
     try expect(ecs.is_alive(world.world_ptr, e1));
     try expect(ecs.is_valid(world.world_ptr, e1));
 
@@ -175,12 +175,12 @@ test "zflecs.basic" {
     try expect(ecs.is_valid(world.world_ptr, e1));
 
     ecs.delete(world.world_ptr, e1);
-    try expect(!ecs.is_alive(world, e1));
+    try expect(!ecs.is_alive(world.world_ptr, e1));
     try expect(!ecs.is_valid(world.world_ptr, e1));
 
-    registerComponents(world);
+    registerComponents(world.world_ptr);
     ecs.COMPONENT(world.world_ptr, *Position);
-    ecs.COMPONENT(world, Position);
+    ecs.COMPONENT(world.world_ptr, Position);
     ecs.COMPONENT(world.world_ptr, ?*const Position);
     ecs.COMPONENT(world.world_ptr, Direction);
     ecs.COMPONENT(world.world_ptr, f64);
@@ -237,23 +237,23 @@ test "zflecs.basic" {
     PrintIdHelper.printId(world.world_ptr, *u31);
 
     const p: Position = .{ .x = 1.0, .y = 2.0 };
-    _ = ecs.set(world.world_ptr, e0, *const Position, &p);
-    _ = ecs.set(world.world_ptr, e0, ?*const Position, null);
-    _ = ecs.set(world.world_ptr, e0, Position, .{ .x = 1.0, .y = 2.0 });
-    _ = ecs.set(world.world_ptr, e0, Direction, .west);
-    _ = ecs.set(world.world_ptr, e0, u31, 123);
-    _ = ecs.set(world.world_ptr, e0, u31, 1234);
-    _ = ecs.set(world.world_ptr, e0, u32, 987);
-    _ = ecs.set(world.world_ptr, e0, S0, .{});
+    _ = world.set( e0, *const Position, &p);
+    _ = world.set( e0, ?*const Position, null);
+    _ = world.set( e0, Position, .{ .x = 1.0, .y = 2.0 });
+    _ = world.set( e0, Direction, .west);
+    _ = world.set( e0, u31, 123);
+    _ = world.set( e0, u31, 1234);
+    _ = world.set( e0, u32, 987);
+    _ = world.set( e0, S0, .{});
 
-    ecs.add(world.world_ptr, e0, Walking);
+    world.add(e0, Walking);
 
-    try expect(ecs.get(world.world_ptr, e0, u31).?.* == 1234);
-    try expect(ecs.get(world.world_ptr, e0, u32).?.* == 987);
-    try expect(ecs.get(world.world_ptr, e0, S0).?.a == 3.0);
-    try expect(ecs.get(world.world_ptr, e0, ?*const Position).?.* == null);
-    try expect(ecs.get(world.world_ptr, e0, *const Position).?.* == &p);
-    if (ecs.get(world.world_ptr, e0, Position)) |pos| {
+    try expect(world.get( e0, u31).?.* == 1234);
+    try expect(world.get( e0, u32).?.* == 987);
+    try expect(world.get( e0, S0).?.a == 3.0);
+    try expect(world.get( e0, ?*const Position).?.* == null);
+    try expect(world.get( e0, *const Position).?.* == &p);
+    if (world.get(e0, Position)) |pos| {
         try expect(pos.x == p.x and pos.y == p.y);
     }
 
@@ -303,7 +303,7 @@ test "zflecs.helloworld.world_ptr" {
     print("\n", .{});
 
     const world = try ecs.init();
-    defer ecs.fini(world.world_ptr) catch unreachable;
+    defer ecs.fini(world) catch unreachable;
 
     ecs.COMPONENT(world.world_ptr, Position);
     ecs.COMPONENT(world.world_ptr, Velocity);
@@ -319,14 +319,14 @@ test "zflecs.helloworld.world_ptr" {
     }
 
     const bob = ecs.new_entity(world.world_ptr, "Bob");
-    _ = ecs.set(world.world_ptr, bob, Position, .{ .x = 0, .y = 0 });
-    _ = ecs.set(world.world_ptr, bob, Velocity, .{ .x = 1, .y = 2 });
+    _ = world.set(bob, Position, .{ .x = 0, .y = 0 });
+    _ = world.set(bob, Velocity, .{ .x = 1, .y = 2 });
     ecs.add_pair(world.world_ptr, bob, ecs.id(Eats), ecs.id(Apples));
 
     _ = ecs.progress(world.world_ptr, 0);
     _ = ecs.progress(world.world_ptr, 0);
 
-    const p = ecs.get(world.world_ptr, bob, Position).?;
+    const p = world.get(bob, Position).?;
     print("Bob's position is ({d}, {d})\n", .{ p.x, p.y });
 }
 
@@ -353,32 +353,32 @@ test "zflecs.helloworld_systemcomptime" {
     print("\n", .{});
 
     const world = try ecs.init();
-    defer _ = ecs.fini(world);
+    defer ecs.fini(world) catch unreachable;
 
-    ecs.COMPONENT(world, Position);
-    ecs.COMPONENT(world, Velocity);
+    ecs.COMPONENT(world.world_ptr, Position);
+    ecs.COMPONENT(world.world_ptr, Velocity);
 
-    ecs.TAG(world, Eats);
-    ecs.TAG(world, Apples);
+    ecs.TAG(world.world_ptr, Eats);
+    ecs.TAG(world.world_ptr, Apples);
 
-    _ = ecs.ADD_SYSTEM(world, "move system", ecs.OnUpdate, move_system);
-    _ = ecs.ADD_SYSTEM(world, "move system with iterator", ecs.OnUpdate, move_system_with_it);
+    _ = ecs.ADD_SYSTEM(world.world_ptr, "move system", ecs.OnUpdate, move_system);
+    _ = ecs.ADD_SYSTEM(world.world_ptr, "move system with iterator", ecs.OnUpdate, move_system_with_it);
 
-    const bob = ecs.new_entity(world, "Bob");
-    _ = ecs.set(world, bob, Position, .{ .x = 0, .y = 0 });
-    _ = ecs.set(world, bob, Velocity, .{ .x = 1, .y = 2 });
-    ecs.add_pair(world, bob, ecs.id(Eats), ecs.id(Apples));
+    const bob = ecs.new_entity(world.world_ptr, "Bob");
+    _ = world.set( bob, Position, .{ .x = 0, .y = 0 });
+    _ = world.set( bob, Velocity, .{ .x = 1, .y = 2 });
+    ecs.add_pair(world.world_ptr, bob, ecs.id(Eats), ecs.id(Apples));
 
-    _ = ecs.progress(world, 0);
-    _ = ecs.progress(world, 0);
+    _ = ecs.progress(world.world_ptr, 0);
+    _ = ecs.progress(world.world_ptr, 0);
 
-    const p = ecs.get(world, bob, Position).?;
+    const p = world.get(bob, Position).?;
     print("Bob's position is ({d}, {d})\n", .{ p.x, p.y });
 }
 
 test "zflecs.try_different_alignments" {
-    const world = ecs.init();
-    defer _ = ecs.fini(world);
+    const world = try ecs.init();
+    defer ecs.fini(world) catch unreachable;
 
     const AlignmentsToTest = [_]usize{ 1, 2, 4, 8, 16 };
     inline for (AlignmentsToTest) |component_alignment| {
@@ -390,80 +390,80 @@ test "zflecs.try_different_alignments" {
 
         const Component = AlignedComponent.Component(component_alignment);
 
-        ecs.COMPONENT(world, Component);
-        const entity = ecs.new_entity(world, "");
+        ecs.COMPONENT(world.world_ptr, Component);
+        const entity = ecs.new_entity(world.world_ptr, "");
 
-        _ = ecs.set(world, entity, Component, .{});
-        _ = ecs.get(world, entity, Component);
+        _ = world.set(entity, Component, .{});
+        _ = world.get(entity, Component);
     }
 }
 
 test "zflecs.pairs.tag-tag" {
-    const world = ecs.init();
-    defer _ = ecs.fini(world);
+    const world = try ecs.init();
+    defer ecs.fini(world) catch unreachable;
 
     const Slowly = struct {};
-    ecs.TAG(world, Slowly);
-    ecs.TAG(world, Walking);
+    ecs.TAG(world.world_ptr, Slowly);
+    ecs.TAG(world.world_ptr, Walking);
 
-    const entity = ecs.new_entity(world, "Bob");
+    const entity = ecs.new_entity(world.world_ptr, "Bob");
 
-    _ = ecs.add_pair(world, entity, ecs.id(Slowly), ecs.id(Walking));
-    try expect(ecs.has_pair(world, entity, ecs.id(Slowly), ecs.id(Walking)));
+    _ = ecs.add_pair(world.world_ptr, entity, ecs.id(Slowly), ecs.id(Walking));
+    try expect(ecs.has_pair(world.world_ptr, entity, ecs.id(Slowly), ecs.id(Walking)));
 
-    _ = ecs.remove_pair(world, entity, ecs.id(Slowly), ecs.id(Walking));
-    try expect(!ecs.has_pair(world, entity, ecs.id(Slowly), ecs.id(Walking)));
+    _ = ecs.remove_pair(world.world_ptr, entity, ecs.id(Slowly), ecs.id(Walking));
+    try expect(!ecs.has_pair(world.world_ptr, entity, ecs.id(Slowly), ecs.id(Walking)));
 }
 
 test "zflecs.pairs.component-tag" {
-    const world = ecs.init();
-    defer _ = ecs.fini(world);
+    const world = try ecs.init();
+    defer ecs.fini(world) catch unreachable;
 
     const Speed = u8;
-    ecs.COMPONENT(world, Speed);
-    ecs.TAG(world, Walking);
+    ecs.COMPONENT(world.world_ptr, Speed);
+    ecs.TAG(world.world_ptr, Walking);
 
-    const entity = ecs.new_entity(world, "Bob");
+    const entity = ecs.new_entity(world.world_ptr, "Bob");
 
-    _ = ecs.set_pair(world, entity, ecs.id(Speed), ecs.id(Walking), Speed, 2);
-    try expect(ecs.has_pair(world, entity, ecs.id(Speed), ecs.id(Walking)));
-    try expectEqual(@as(u8, 2), ecs.get_pair(world, entity, ecs.id(Speed), ecs.id(Walking), Speed).?.*);
+    _ = ecs.set_pair(world.world_ptr, entity, ecs.id(Speed), ecs.id(Walking), Speed, 2);
+    try expect(ecs.has_pair(world.world_ptr, entity, ecs.id(Speed), ecs.id(Walking)));
+    try expectEqual(@as(u8, 2), ecs.get_pair(world.world_ptr, entity, ecs.id(Speed), ecs.id(Walking), Speed).?.*);
 
-    _ = ecs.remove_pair(world, entity, ecs.id(Speed), ecs.id(Walking));
-    try expect(!ecs.has_pair(world, entity, ecs.id(Speed), ecs.id(Walking)));
-    try expectEqual(@as(?*const u8, null), ecs.get_pair(world, entity, ecs.id(Speed), ecs.id(Walking), Speed));
+    _ = ecs.remove_pair(world.world_ptr, entity, ecs.id(Speed), ecs.id(Walking));
+    try expect(!ecs.has_pair(world.world_ptr, entity, ecs.id(Speed), ecs.id(Walking)));
+    try expectEqual(@as(?*const u8, null), ecs.get_pair(world.world_ptr, entity, ecs.id(Speed), ecs.id(Walking), Speed));
 }
 
 test "zflecs.pairs.delete-children" {
-    const world = ecs.init();
-    defer _ = ecs.fini(world);
+    const world = try ecs.init();
+    defer ecs.fini(world) catch unreachable;
 
     const Camera = struct { id: u8 };
 
-    ecs.COMPONENT(world, Camera);
+    ecs.COMPONENT(world.world_ptr, Camera);
 
-    const entity = ecs.new_entity(world, "scene");
+    const entity = ecs.new_entity(world.world_ptr, "scene");
 
-    const fps = ecs.new_w_pair(world, ecs.ChildOf, entity);
-    _ = ecs.set(world, fps, Camera, .{ .id = 1 });
-    const third_person = ecs.new_w_pair(world, ecs.ChildOf, entity);
-    _ = ecs.set(world, third_person, Camera, .{ .id = 2 });
+    const fps = ecs.new_w_pair(world.world_ptr, ecs.ChildOf, entity);
+    _ = world.set(fps, Camera, .{ .id = 1 });
+    const third_person = ecs.new_w_pair(world.world_ptr, ecs.ChildOf, entity);
+    _ = world.set(third_person, Camera, .{ .id = 2 });
 
     var found: u8 = 0;
-    var it = ecs.children(world, entity);
+    var it = ecs.children(world.world_ptr, entity);
     while (ecs.children_next(&it)) {
         for (0..it.count()) |i| {
             const child_entity = it.entities()[i];
-            const p: ?*const Camera = ecs.get(world, child_entity, Camera);
+            const p: ?*const Camera = world.get(child_entity, Camera);
             try expectEqual(@as(u8, @intCast(i)), p.?.id - @as(u8, 1));
             found += 1;
         }
     }
     try expectEqual(@as(u8, 2), found);
-    ecs.delete_children(world, entity);
+    ecs.delete_children(world.world_ptr, entity);
 
     found = 0;
-    it = ecs.children(world, entity);
+    it = ecs.children(world.world_ptr, entity);
     while (ecs.children_next(&it)) {
         for (0..it.count()) |_| {
             found += 1;
@@ -473,8 +473,8 @@ test "zflecs.pairs.delete-children" {
 }
 
 test "zflecs.struct-dtor-hook" {
-    const world = ecs.init();
-    defer _ = ecs.fini(world);
+    const world = try ecs.init();
+    defer ecs.fini(world) catch unreachable;
 
     const Chat = struct {
         messages: std.ArrayList([]const u8) = .{},
@@ -483,7 +483,7 @@ test "zflecs.struct-dtor-hook" {
         }
     };
 
-    ecs.COMPONENT(world, Chat);
+    ecs.COMPONENT(world.world_ptr, Chat);
     {
         var system_desc = ecs.system_desc_t{};
         system_desc.callback = struct {
@@ -495,15 +495,15 @@ test "zflecs.struct-dtor-hook" {
             }
         }.chatSystem;
         system_desc.query.terms[0] = .{ .id = ecs.id(Chat) };
-        _ = ecs.SYSTEM(world, "Chat system", ecs.OnUpdate, &system_desc);
+        _ = ecs.SYSTEM(world.world_ptr, "Chat system", ecs.OnUpdate, &system_desc);
     }
 
-    const chat_entity = ecs.new_entity(world, "Chat entity");
-    _ = ecs.set(world, chat_entity, Chat, Chat{});
+    const chat_entity = ecs.new_entity(world.world_ptr, "Chat entity");
+    _ = world.set(chat_entity, Chat, Chat{});
 
-    _ = ecs.progress(world, 0);
+    _ = ecs.progress(world.world_ptr, 0);
 
-    const chat_component = ecs.get(world, chat_entity, Chat).?;
+    const chat_component = world.get(chat_entity, Chat).?;
     try std.testing.expect(chat_component.messages.items.len == 1);
 
     // This test fails if the ".hooks = .{ .dtor = ... }" from COMPONENT is
@@ -524,22 +524,22 @@ pub fn CStyleTestModule(world: *ecs.world_t) callconv(.c) void {
     _ = ecs.module_init(world, @src().fn_name, &desc);
 }
 test "zflecs-module" {
-    const world = ecs.init();
-    defer _ = ecs.fini(world);
+    const world = try ecs.init();
+    defer ecs.fini(world) catch unreachable;
 
-    const import_entity = ecs.IMPORT(world, TestModule);
+    const import_entity = world.import(TestModule);
     try expect(import_entity != 0);
 
-    const cstyle_import_entity  = ecs.import_c(world, CStyleTestModule, "CStyleTestModule");
+    const cstyle_import_entity  = world.import_c(CStyleTestModule, "CStyleTestModule");
     try expect(cstyle_import_entity != 0);
 
-    const bob = ecs.new_entity(world, "Bob");
-    _ = ecs.set(world, bob, Position, .{ .x = 0, .y = 0 });
-    _ = ecs.set(world, bob, Velocity, .{ .x = 1, .y = 2 });
+    const bob = ecs.new_entity(world.world_ptr, "Bob");
+    _ = world.set( bob, Position, .{ .x = 0, .y = 0 });
+    _ = world.set( bob, Velocity, .{ .x = 1, .y = 2 });
 
-    _ = ecs.progress(world, 0);
-    _ = ecs.progress(world, 0);
+    _ = ecs.progress(world.world_ptr, 0);
+    _ = ecs.progress(world.world_ptr, 0);
 
-    const p = ecs.get(world, bob, Position).?;
+    const p = world.get(bob, Position).?;
     print("Bob's position is ({d}, {d})\n", .{ p.x, p.y });
 }

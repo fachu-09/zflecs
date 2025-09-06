@@ -1433,7 +1433,7 @@ pub fn fini(world: *World) !void {
     }
 
     if( fini_result != 0) {
-        return error_t;
+        return error_t.FlecsError;
     }
 }
 extern fn ecs_fini(world: *world_t) i32;
@@ -2768,14 +2768,14 @@ pub fn SYSTEM(
     system_desc: *system_desc_t,
 ) entity_t {
     var entity_desc = entity_desc_t{};
-    entity_desc.id = new_id(world);
+    entity_desc.id = ecs_new(world);
     entity_desc.name = name;
     const first = if (phase != 0) pair(EcsDependsOn, phase) else 0;
     const second = phase;
     entity_desc.add = &.{ first, second, 0 };
 
     system_desc.entity = entity_init(world, &entity_desc);
-    return system_init(world, system_desc);
+    return ecs_system_init(world, system_desc);
 }
 
 pub fn OBSERVER(
@@ -2972,38 +2972,38 @@ pub fn typeName(comptime T: type) @TypeOf(@typeName(T)) {
 // Function wrappers (ecs_* macros in flecs)
 //
 //--------------------------------------------------------------------------------------------------
-pub fn set(world: *world_t, entity: entity_t, comptime T: type, val: T) entity_t {
-    return ecs_set_id(world, entity, id(T), @sizeOf(T), @as(*const anyopaque, @ptrCast(&val)));
+pub fn set(world: *World, entity: entity_t, comptime T: type, val: T) entity_t {
+    return ecs_set_id(world.world_ptr, entity, id(T), @sizeOf(T), @as(*const anyopaque, @ptrCast(&val)));
 }
 
-pub fn get(world: *const world_t, entity: entity_t, comptime T: type) ?*const T {
-    if (get_id(world, entity, id(T))) |ptr| {
+pub fn get(world: *const World, entity: entity_t, comptime T: type) ?*const T {
+    if (get_id(world.world_ptr, entity, id(T))) |ptr| {
         return cast(T, ptr);
     }
     return null;
 }
 
-pub fn get_mut(world: *world_t, entity: entity_t, comptime T: type) ?*T {
-    if (get_mut_id(world, entity, id(T))) |ptr| {
+pub fn get_mut(world: *World, entity: entity_t, comptime T: type) ?*T {
+    if (get_mut_id(world.world_ptr, entity, id(T))) |ptr| {
         return cast_mut(T, ptr);
     }
     return null;
 }
 
-pub fn add(world: *world_t, entity: entity_t, comptime T: type) void {
-    ecs_add_id(world, entity, id(T));
+pub fn add(world: *World, entity: entity_t, comptime T: type) void {
+    ecs_add_id(world.world_ptr, entity, id(T));
 }
 
-pub fn remove(world: *world_t, entity: entity_t, comptime T: type) void {
-    ecs_remove_id(world, entity, id(T));
+pub fn remove(world: *World, entity: entity_t, comptime T: type) void {
+    ecs_remove_id(world.world_ptr, entity, id(T));
 }
 
-pub fn override(world: *world_t, entity: entity_t, comptime T: type) void {
-    ecs_auto_override_id(world, entity, id(T));
+pub fn override(world: World, entity: entity_t, comptime T: type) void {
+    ecs_auto_override_id(world.world_ptr, entity, id(T));
 }
 
-pub fn modified(world: *world_t, entity: entity_t, comptime T: type) void {
-    ecs_modified_id(world, entity, id(T));
+pub fn modified(world: World, entity: entity_t, comptime T: type) void {
+    ecs_modified_id(world.world_ptr, entity, id(T));
 }
 
 pub fn field(it: *iter_t, comptime T: type, index: i8) ?[]T {
@@ -3028,46 +3028,46 @@ pub fn cast_mut(comptime T: type, val: ?*anyopaque) *T {
     return @as(*T, @ptrCast(@alignCast(val)));
 }
 
-pub fn singleton_set(world: *world_t, comptime T: type, val: T) entity_t {
-    return set(world, id(T), T, val);
+pub fn singleton_set(world: World, comptime T: type, val: T) entity_t {
+    return set(world.world_ptr, id(T), T, val);
 }
 
-pub fn singleton_get(world: *world_t, comptime T: type) ?*const T {
-    return get(world, id(T), T);
+pub fn singleton_get(world: World, comptime T: type) ?*const T {
+    return get(world.world_ptr, id(T), T);
 }
 
-pub fn singleton_get_mut(world: *world_t, comptime T: type) ?*T {
-    return get_mut(world, id(T), T);
+pub fn singleton_get_mut(world: World, comptime T: type) ?*T {
+    return get_mut(world.world_ptr, id(T), T);
 }
 
-pub fn singleton_add(world: *world_t, comptime T: type) void {
-    add(world, id(T), T);
+pub fn singleton_add(world: World, comptime T: type) void {
+    add(world.world_ptr, id(T), T);
 }
 
-pub fn singleton_remove(world: *world_t, comptime T: type) void {
-    remove(world, id(T), T);
+pub fn singleton_remove(world: World, comptime T: type) void {
+    remove(world.world_ptr, id(T), T);
 }
 
-pub fn singleton_modified(world: *world_t, comptime T: type) void {
-    modified(world, id(T), T);
+pub fn singleton_modified(world: World, comptime T: type) void {
+    modified(world.world_ptr, id(T), T);
 }
 
 // Entity Names
 
-pub fn lookup_path(world: *const world_t, parent: entity_t, path: [*:0]const u8) entity_t {
-    return ecs_lookup_path_w_sep(world, parent, path, ".", null, true);
+pub fn lookup_path(world: *const World, parent: entity_t, path: []const u8) entity_t {
+    return ecs_lookup_path_w_sep(world.world_ptr, parent, path, ".", null, true);
 }
 
-pub fn lookup_fullpath(world: *const world_t, path: [*:0]const u8) entity_t {
-    return ecs_lookup_path_w_sep(world, 0, path, ".", null, true);
+pub fn lookup_fullpath(world: *const World, path: []const u8) entity_t {
+    return ecs_lookup_path_w_sep(world.world_ptr, 0, path, ".", null, true);
 }
 
-pub fn get_path(world: *const world_t, parent: entity_t, child: entity_t) [*:0]u8 {
-    return ecs_get_path_w_sep(world, parent, child, ".", null);
+pub fn get_path(world: *const World, parent: entity_t, child: entity_t) []const u8 {
+    return ecs_get_path_w_sep(world.world_ptr, parent, child, ".", null);
 }
 
-pub fn get_fullpath(world: *const world_t, child: entity_t) [*:0]u8 {
-    return ecs_get_path_w_sep(world, 0, child, ".", null);
+pub fn get_fullpath(world: *const World, child: entity_t) []u8 {
+    return ecs_get_path_w_sep(world.world_ptr, 0, child, ".", null);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -3261,12 +3261,16 @@ pub fn delete_children(world: *world_t, parent: entity_t) void {
 //
 //--------------------------------------------------------------------------------------------------
 
-/// `pub fn import_c(world: *world_t, comptime module: type) entity_t`
-pub const import_c = ecs_import_c;
+/// `pub fn import_c(world: *World, comptime module: type) entity_t`
+pub inline fn import_c(world: *World, comptime module: module_action_t, name: []const u8) entity_t {
+    var buffer: [name.len + 1]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const allocator = fba.allocator();
+    const name_c = allocator.dupeZ(u8, name) catch unreachable;
+    return ecs_import_c(world.world_ptr, module, name_c);
+}
 extern fn ecs_import_c(world: *world_t, module: module_action_t, module_name_c: [*:0]const u8) entity_t;
 
-/// `pub fn import_c(world: *world_t, comptime module: type) entity_t`
-pub const import = ecs_import;
 extern fn ecs_import(world: *world_t, module: module_action_t, module_name_c: [*:0]const u8) entity_t;
 
 /// `pub fn module_init(world: *world_t, c_name: [*:0]const u8, desc: *component_desc_t) entity_t`
@@ -3275,6 +3279,10 @@ extern fn ecs_module_init(world: *world_t, c_name: [*:0]const u8, desc: *compone
 
 extern fn flecs_module_path_from_c([*:0]const u8) [*:0]const u8;
 
+/// `pub fn import(world: *World, comptime module: type) entity_t`
+pub inline fn import(world: *World, comptime module: type) entity_t {
+    return IMPORT(world.world_ptr, module);
+}
 pub fn IMPORT(world: *world_t, T: type) entity_t {
     // type validation
     if (!std.meta.hasMethod(T, "import")) {
