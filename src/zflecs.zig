@@ -1,7 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const builtin = @import("builtin");
-const World = @This();
+pub const World = @This();
 
 pub const flecs_version = std.SemanticVersion{
     .major = 4,
@@ -350,6 +350,21 @@ pub var ScopeOpen: entity_t = undefined;
 pub var ScopeClose: entity_t = undefined;
 pub var Empty: entity_t = undefined;
 
+pub const PhaseTags = enum(entity_t) {
+    OnStart = EcsOnStart,
+    PreFrame = EcsPreFrame,
+    OnLoad = EcsOnLoad,
+    PostLoad = EcsPostLoad,
+    PreUpdate = EcsPreUpdate,
+    OnUpdate = EcsOnUpdate,
+    OnValidate = EcsOnValidate,
+    PostUpdate = EcsPostUpdate,
+    PreStore = EcsPreStore,
+    OnStore = EcsOnStore,
+    PostFrame = EcsPostFrame,
+    Phase = EcsPhase,
+    _,
+};
 pub var OnStart: entity_t = undefined;
 pub var PreFrame: entity_t = undefined;
 pub var OnLoad: entity_t = undefined;
@@ -654,6 +669,15 @@ pub const query_t = extern struct {
     world: ?*world_t = null,
 
     eval_count: i32 = 0,
+
+    /// `pub fn query_fini(query: *query_t) void`
+    pub const query_fini = ecs_query_fini;
+
+    /// `pub fn query_iter(world: *const world_t: query: *const query_t) iter_t`
+    pub inline fn query_iter(query: *const query_t) iter_t {
+        return ecs_query_iter(query.world.?, query);
+
+    }
 };
 
 pub fn array(comptime T: type, comptime len: comptime_int) [len]T {
@@ -1074,6 +1098,18 @@ pub const iter_t = extern struct {
     pub fn count(iter: iter_t) usize {
         return @as(usize, @intCast(iter.count_));
     }
+    pub fn field(it: *iter_t, comptime T: type, index: i8) ?[]T {
+        if (ecs_field_w_size(it, @sizeOf(T), index)) |anyptr| {
+            const ptr = @as([*]T, @ptrCast(@alignCast(anyptr)));
+            return ptr[0..it.count()];
+        }
+        return null;
+    }
+    /// `pub fn each_next(it: *iter_t) bool`
+    pub const each_next = ecs_each_next;
+
+    /// `pub fn query_next(iter: *iter_t) bool`
+    pub const query_next = ecs_query_next;
 };
 
 pub const query_desc_t = extern struct {
@@ -1846,7 +1882,10 @@ extern fn ecs_exists(world: *const world_t, entity: entity_t) bool;
 //
 //--------------------------------------------------------------------------------------------------
 /// `pub fn get_type(world: *const world_t, entity: entity_t) ?*const type_t`
-pub const get_type = ecs_get_type;
+pub inline fn get_type(world: *const World, entity: entity_t) ?*const type_t {
+
+    return ecs_get_type(world.world_ptr, entity);
+}
 extern fn ecs_get_type(world: *const world_t, entity: entity_t) ?*const type_t;
 
 /// `pub fn get_table(world: *const world_t, entity: entity_t) ?*const table_t`
@@ -1854,7 +1893,12 @@ pub const get_table = ecs_get_table;
 extern fn ecs_get_table(world: *const world_t, entity: entity_t) ?*const table_t;
 
 /// `pub fn type_str(world: *const world_t, type: ?*const type_t) ?[*:0]u8`
-pub const type_str = ecs_type_str;
+pub inline fn type_str(world: *const World, t: *const type_t ) ?[]const u8 {
+    const str = ecs_type_str(world.world_ptr, t);
+
+    return std.mem.span(str);
+
+}
 extern fn ecs_type_str(world: *const world_t, type: ?*const type_t) ?[*:0]u8;
 
 /// `pub fn table_str(world: *const world_t, table: ?*const table_t) ?[*:0]u8`
@@ -1898,7 +1942,11 @@ extern fn ecs_count_id(world: *const world_t, entity: entity_t) i32;
 //
 //--------------------------------------------------------------------------------------------------
 /// `pub fn get_name(world: *const world_t, entity: entity_t) ?[*:0]const u8`
-pub const get_name = ecs_get_name;
+pub inline fn get_name(world: *const World, entity: entity_t) ?[]const u8 {
+    return std.mem.span(ecs_get_name(world.world_ptr, entity));
+    
+
+}
 extern fn ecs_get_name(world: *const world_t, entity: entity_t) ?[*:0]const u8;
 
 /// `pub fn get_symbol(world: *const world_t, entity: entity_t) ?[*:0]const u8`
@@ -1906,7 +1954,11 @@ pub const get_symbol = ecs_get_symbol;
 extern fn ecs_get_symbol(world: *const world_t, entity: entity_t) ?[*:0]const u8;
 
 /// `pub fn set_name(world: *world_t, entity: entity_t, name: ?[*:0]const u8) entity_t`
-pub const set_name = ecs_set_name;
+pub inline fn set_name(world: *World, entity: entity_t, name: []const u8) entity_t {
+
+    const name_c = std.fmt.comptimePrint("{s}", .{name});
+    return ecs_set_name(world.world_ptr, entity, name_c);
+}
 extern fn ecs_set_name(world: *world_t, entity: entity_t, name: ?[*:0]const u8) entity_t;
 
 /// `pub fn set_symbol(world: *world_t, entity: entity_t, name: ?[*:0]const u8) entity_t`
@@ -2125,8 +2177,8 @@ extern fn ecs_id_from_str(world: *const world_t, expr: [*:0]const u8) id_t;
 //
 //--------------------------------------------------------------------------------------------------
 
-pub fn each(world: *const world_t, comptime T: type) iter_t {
-    return each_id(world, id(T));
+pub fn each(world: *const World, comptime T: type) iter_t {
+    return each_id(world.world_ptr, id(T));
 }
 
 /// `pub fn ecs_each_id(world: *const world_t, id: id_t) iter_t`
@@ -2137,8 +2189,6 @@ extern fn ecs_each_id(world: *const world_t, id: id_t) iter_t;
 pub const term_chain_iter = ecs_term_chain_iter;
 extern fn ecs_term_chain_iter(world: *const world_t, term: *term_t) iter_t;
 
-/// `pub fn term_next(it: *iter_t) bool`
-pub const each_next = ecs_each_next;
 extern fn ecs_each_next(it: *iter_t) bool;
 
 /// `pub fn children(world: *const world_t, parent: entity_t) iter_t`
@@ -2178,21 +2228,15 @@ extern fn ecs_term_str(world: *const world_t, term: *const term_t) ?[*:0]u8;
 // Functions for working with `query_t`.
 //
 //--------------------------------------------------------------------------------------------------
-pub fn query_init(world: *world_t, desc: *const query_desc_t) error_t!*query_t {
-    return ecs_query_init(world, desc) orelse return make_error();
+pub fn query_init(world: *World, desc: *const query_desc_t) error_t!*query_t {
+    return ecs_query_init(world.world_ptr, desc) orelse return make_error();
 }
 extern fn ecs_query_init(world: *world_t, desc: *const query_desc_t) ?*query_t;
 
-/// `pub fn query_fini(query: *query_t) void`
-pub const query_fini = ecs_query_fini;
 extern fn ecs_query_fini(query: *query_t) void;
 
-/// `pub fn query_iter(world: *const world_t: query: *const query_t) iter_t`
-pub const query_iter = ecs_query_iter;
 extern fn ecs_query_iter(world: *const world_t, query: *const query_t) iter_t;
 
-/// `pub fn query_next(iter: *iter_t) bool`
-pub const query_next = ecs_query_next;
 extern fn ecs_query_next(iter: *iter_t) bool;
 
 /// `pub fn query_next_table(iter: *iter_t) bool`
@@ -2633,7 +2677,9 @@ extern fn ecs_value_init_w_type_info(world: *const world_t, ti: *const type_info
 // TODO: Add missing functions
 //--------------------------------------------------------------------------------------------------
 /// `pub fn progress(world: *world_t, delta_time: ftime_t) bool`
-pub const progress = ecs_progress;
+pub inline fn progress(world: *World, delta_time: ftime_t) bool {
+    return ecs_progress(world.world_ptr, delta_time);
+}
 extern fn ecs_progress(world: *world_t, delta_time: ftime_t) bool;
 
 /// `pub fn set_time_scale(world: *world_t, scale: ftime_t) void`
@@ -2724,46 +2770,7 @@ pub fn TAG(world: *world_t, comptime T: type) void {
     type_id_ptr.* = ecs_entity_init(world, &.{ .name = typeName(T) });
 }
 
-const system_zdesc = struct {
-    name: ?[]const u8 = null,
-    callback: type,
-    phase: entity_t,
-    terms: []const struct {type, comptime inout_kind_t = .InOutDefault, comptime oper_kind_t = .And},
 
-    pub fn to_system_desc_t(self: @This()) system_desc_t {
-
-        comptime var terms: [self.terms.len]system_desc_t = undefined;
-        inline for (self.terms, 0..) |term, i| {
-            terms[i] = .{
-                .id = id(term.@"0"),
-                .inout = term.@"1",
-                .oper = term.@"2",
-            };
-        }
-        return .{
-            .callback = self.callback,
-            .query = .{
-                .terms = terms
-            }
-        };
-    }
-};
-//world.system(.{
-//    .name = "move",
-//    .callback = my_fn,
-//    .terms = .{
-//        .{*Position, .In},
-//        .{*const Velocity},
-//    }
-//})
-
-pub fn system(world: *World, desc: system_zdesc) void {
-    const name: [*:0]const u8 = if (desc.name == null) "" else std.fmt.comptimePrint("{s}", .{desc.name.?});
-    
-    const desc_t = desc.to_system_desc_t();
-    _ = SYSTEM(world.world_ptr, name, desc.phase, &desc_t);
-
-}
 pub fn SYSTEM(
     world: *world_t,
     name: [*:0]const u8,
@@ -2902,8 +2909,8 @@ pub fn ADD_SYSTEM_WITH_FILTERS(
     return SYSTEM(world, name, phase, &desc);
 }
 
-pub fn new_entity(world: *world_t, name: [*:0]const u8) entity_t {
-    return entity_init(world, &.{ .name = name });
+pub fn new_entity(world: *World, name: [*:0]const u8) entity_t {
+    return entity_init(world.world_ptr, &.{ .name = name });
 }
 
 pub fn new_prefab(world: *world_t, name: [*:0]const u8) entity_t {
@@ -3266,10 +3273,7 @@ pub fn delete_children(world: *world_t, parent: entity_t) void {
 
 /// `pub fn import_c(world: *World, comptime module: type) entity_t`
 pub inline fn import_c(world: *World, comptime module: module_action_t, name: []const u8) entity_t {
-    var buffer: [name.len + 1]u8 = undefined;
-    var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    const allocator = fba.allocator();
-    const name_c = allocator.dupeZ(u8, name) catch unreachable;
+    const name_c = std.fmt.comptimePrint("{s}", .{name});
     return ecs_import_c(world.world_ptr, module, name_c);
 }
 extern fn ecs_import_c(world: *world_t, module: module_action_t, module_name_c: [*:0]const u8) entity_t;
@@ -3283,8 +3287,40 @@ extern fn ecs_module_init(world: *world_t, c_name: [*:0]const u8, desc: *compone
 extern fn flecs_module_path_from_c([*:0]const u8) [*:0]const u8;
 
 /// `pub fn import(world: *World, comptime module: type) entity_t`
-pub inline fn import(world: *World, comptime module: type) entity_t {
-    return IMPORT(world.world_ptr, module);
+pub fn import(world: *World, comptime module: type) entity_t {
+    // type validation
+    if (!std.meta.hasMethod(module, "import")) {
+        const fmt = std.fmt.comptimePrint("Module {s} should be a Struct with a method import as:\n --- pub fn import (*world_t) void", .{@typeName(module)});
+        @compileError(fmt);
+    }
+    // ecs_import
+    const old_scope = ecs_set_scope(world.world_ptr, 0);
+    const world_info = ecs_get_world_info(world.world_ptr);
+    const old_name_prefix = world_info.name_prefix;
+
+    const path = flecs_module_path_from_c(@typeName(module));
+    defer EcsAllocator.free(@constCast(path));
+    var e = ecs_lookup(world.world_ptr, path);
+    if (e == 0) {
+        // Load module
+
+        var desc = component_desc_t{ .entity = id(module), .type = .{
+            .alignment = 0,
+            .size = 0,
+        } };
+        perTypeGlobalVarPtr(module).* = module_init(world.world_ptr, @typeName(module), &desc);
+        _ = ecs_set_scope(world.world_ptr, id(module));
+
+        module.import(world);
+
+        e = ecs_lookup(world.world_ptr, path);
+    }
+
+    // Restore to previous state
+    _ = ecs_set_scope(world.world_ptr, old_scope);
+    _ = set_name_prefix(world.world_ptr, old_name_prefix);
+
+    return e;
 }
 pub fn IMPORT(world: *world_t, T: type) entity_t {
     // type validation
