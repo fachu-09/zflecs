@@ -61,7 +61,7 @@ test "zflecs.entities.basics" {
     print("\n", .{});
 
     const world = try ecs.init();
-    defer ecs.fini(world) catch unreachable;
+    defer world.fini();
 
     ecs.COMPONENT(world.world_ptr, Position);
     ecs.TAG(world.world_ptr, Walking);
@@ -155,7 +155,7 @@ test "zflecs.basic" {
     print("\n", .{});
 
     const world = try ecs.init();
-    defer ecs.fini(world) catch unreachable;
+    defer world.fini();
 
     try expect(ecs.is_fini(world) == false);
 
@@ -303,7 +303,7 @@ test "zflecs.helloworld.world_ptr" {
     print("\n", .{});
 
     const world = try ecs.init();
-    defer ecs.fini(world) catch unreachable;
+    defer world.fini();
 
     ecs.COMPONENT(world.world_ptr, Position);
     ecs.COMPONENT(world.world_ptr, Velocity);
@@ -353,7 +353,7 @@ test "zflecs.helloworld_systemcomptime" {
     print("\n", .{});
 
     const world = try ecs.init();
-    defer ecs.fini(world) catch unreachable;
+    defer world.fini();
 
     ecs.COMPONENT(world.world_ptr, Position);
     ecs.COMPONENT(world.world_ptr, Velocity);
@@ -378,7 +378,7 @@ test "zflecs.helloworld_systemcomptime" {
 
 test "zflecs.try_different_alignments" {
     const world = try ecs.init();
-    defer ecs.fini(world) catch unreachable;
+    defer world.fini();
 
     const AlignmentsToTest = [_]usize{ 1, 2, 4, 8, 16 };
     inline for (AlignmentsToTest) |component_alignment| {
@@ -400,7 +400,7 @@ test "zflecs.try_different_alignments" {
 
 test "zflecs.pairs.tag-tag" {
     const world = try ecs.init();
-    defer ecs.fini(world) catch unreachable;
+    defer world.fini();
 
     const Slowly = struct {};
     ecs.TAG(world.world_ptr, Slowly);
@@ -417,7 +417,7 @@ test "zflecs.pairs.tag-tag" {
 
 test "zflecs.pairs.component-tag" {
     const world = try ecs.init();
-    defer ecs.fini(world) catch unreachable;
+    defer world.fini();
 
     const Speed = u8;
     ecs.COMPONENT(world.world_ptr, Speed);
@@ -436,7 +436,7 @@ test "zflecs.pairs.component-tag" {
 
 test "zflecs.pairs.delete-children" {
     const world = try ecs.init();
-    defer ecs.fini(world) catch unreachable;
+    defer world.fini();
 
     const Camera = struct { id: u8 };
 
@@ -474,7 +474,7 @@ test "zflecs.pairs.delete-children" {
 
 test "zflecs.struct-dtor-hook" {
     const world = try ecs.init();
-    defer ecs.fini(world) catch unreachable;
+    defer world.fini();
 
     const Chat = struct {
         messages: std.ArrayList([]const u8) = .{},
@@ -525,7 +525,7 @@ pub fn CStyleTestModule(world: *ecs.world_t) callconv(.c) void {
 }
 test "zflecs-module" {
     const world = try ecs.init();
-    defer ecs.fini(world) catch unreachable;
+    defer world.fini();
 
     const import_entity = world.import(TestModule);
     try expect(import_entity != 0);

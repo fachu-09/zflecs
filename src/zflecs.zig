@@ -554,7 +554,7 @@ pub const system_t = extern struct {
 
 /// `pub fn system_get(world: *const World, system: entity_t) *const system_t`
 pub inline fn system_get(self: *const World, system_e: entity_t) *const system_t {
-    return ecs_system_get(self.world_t, system_e);
+    return ecs_system_get(self.world_ptr, system_e);
 }
 extern fn ecs_system_get(world: *world_t, system: entity_t) *const system_t;
 
@@ -1412,7 +1412,7 @@ pub fn init() !*World {
 }
 extern fn ecs_init() *world_t;
 
-pub fn fini(world: *World) !void {
+pub fn fini(world: *World) void {
     assert(num_worlds == 1);
     num_worlds -= 1;
 
@@ -1433,7 +1433,10 @@ pub fn fini(world: *World) !void {
     }
 
     if( fini_result != 0) {
-        return error_t.FlecsError;
+        std.debug.lockStdErr();
+        defer std.debug.unlockStdErr();
+        const stderr = std.fs.File.stderr().deprecatedWriter();
+        nosuspend stderr.print("flecs World non zero return code: {}\n", .{fini_result}) catch return;
     }
 }
 extern fn ecs_fini(world: *world_t) i32;
@@ -1473,8 +1476,8 @@ pub inline fn run_post_frame(world: *World, action: fini_action_t, ctx: ?*anyopa
 extern fn ecs_run_post_frame(world: *world_t, action: fini_action_t, ctx: ?*anyopaque) void;
 
 /// `pub fn quit(world: *world_t) void`
-pub inline fn quit(_: *World) void {
-    ecs_quit();
+pub inline fn quit(world: *World) void {
+    ecs_quit(world.world_ptr);
 }
 extern fn ecs_quit(world: *world_t) void;
 
