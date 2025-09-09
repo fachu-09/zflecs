@@ -350,21 +350,6 @@ pub var ScopeOpen: entity_t = undefined;
 pub var ScopeClose: entity_t = undefined;
 pub var Empty: entity_t = undefined;
 
-pub const PhaseTags = enum(entity_t) {
-    OnStart = EcsOnStart,
-    PreFrame = EcsPreFrame,
-    OnLoad = EcsOnLoad,
-    PostLoad = EcsPostLoad,
-    PreUpdate = EcsPreUpdate,
-    OnUpdate = EcsOnUpdate,
-    OnValidate = EcsOnValidate,
-    PostUpdate = EcsPostUpdate,
-    PreStore = EcsPreStore,
-    OnStore = EcsOnStore,
-    PostFrame = EcsPostFrame,
-    Phase = EcsPhase,
-    _,
-};
 pub var OnStart: entity_t = undefined;
 pub var PreFrame: entity_t = undefined;
 pub var OnLoad: entity_t = undefined;
@@ -2770,7 +2755,14 @@ pub fn TAG(world: *world_t, comptime T: type) void {
     type_id_ptr.* = ecs_entity_init(world, &.{ .name = typeName(T) });
 }
 
-
+pub inline fn system(
+    world: *World,
+    name: []const u8,
+    phase: entity_t,
+    system_desc: *system_desc_t,
+) entity_t {
+    return SYSTEM(world.world_ptr, std.fmt.comptimePrint("{s}", .{name}), phase, system_desc);
+}
 pub fn SYSTEM(
     world: *world_t,
     name: [*:0]const u8,
@@ -2788,6 +2780,14 @@ pub fn SYSTEM(
     return ecs_system_init(world, system_desc);
 }
 
+pub inline fn observer(
+    world: *World,
+    name: []const u8,
+    observer_desc: *observer_desc_t
+) entity_t {
+    return OBSERVER(world.world_ptr, std.fmt.comptimePrint("{}", .{name}), observer_desc);
+
+}
 pub fn OBSERVER(
     world: *world_t,
     name: [*:0]const u8,
