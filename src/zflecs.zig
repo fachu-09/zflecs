@@ -3567,7 +3567,7 @@ pub extern fn FlecsStatsImport(world: *world_t) void;
 // FLECS_APP
 //
 //--------------------------------------------------------------------------------------------------
-pub const app_init_action_t = opaque {} ;
+pub const app_init_action_t = fn (*world_t) c_int;
 pub const app_desc_t = extern struct{
     target_fps: ftime_t,        // Target FPS. */
     delta_time: ftime_t,        // Frame time increment (0 for measured values) */
