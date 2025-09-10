@@ -3564,6 +3564,28 @@ pub extern fn FlecsStatsImport(world: *world_t) void;
 
 //--------------------------------------------------------------------------------------------------
 //
+// FLECS_APP
+//
+//--------------------------------------------------------------------------------------------------
+pub const app_init_action_t = opaque {} ;
+pub const app_desc_t = extern struct{
+    target_fps: ftime_t,        // Target FPS. */
+    delta_time: ftime_t,        // Frame time increment (0 for measured values) */
+    threads: i32,               // Number of threads. */
+    frames: i32,                // Number of frames to run (0 for infinite) */
+    enable_rest: bool,          // Enables ECS access over HTTP, necessary for explorer */
+    enable_stats: bool,         // Periodically collect statistics */
+    port: u32,                  // HTTP port used by REST API */
+
+    init: app_init_action_t,  // If set, function is ran before starting the
+
+    ctx: *anyopaque,             // Reserved for custom run/frame actions */
+};
+pub extern fn ecs_app_run(world: *world_t, desc: *app_desc_t) c_int;
+
+
+//--------------------------------------------------------------------------------------------------
+//
 // FLECS_REST
 //
 //--------------------------------------------------------------------------------------------------
