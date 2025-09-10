@@ -3577,9 +3577,9 @@ pub const app_desc_t = extern struct{
     enable_stats: bool,         // Periodically collect statistics */
     port: u32,                  // HTTP port used by REST API */
 
-    init: app_init_action_t,  // If set, function is ran before starting the
+    init: ?app_init_action_t,  // If set, function is ran before starting the
 
-    ctx: *anyopaque,             // Reserved for custom run/frame actions */
+    ctx: ?*void,             // Reserved for custom run/frame actions */
 };
 pub extern fn ecs_app_run(world: *world_t, desc: *app_desc_t) c_int;
 
