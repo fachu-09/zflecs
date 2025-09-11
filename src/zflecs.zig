@@ -3575,7 +3575,7 @@ pub const app_desc_t = extern struct{
     frames: i32,                // Number of frames to run (0 for infinite) */
     enable_rest: bool,          // Enables ECS access over HTTP, necessary for explorer */
     enable_stats: bool,         // Periodically collect statistics */
-    port: u32,                  // HTTP port used by REST API */
+    port: u16,                  // HTTP port used by REST API */
 
     init: ?app_init_action_t,  // If set, function is ran before starting the
 
