@@ -1534,7 +1534,7 @@ extern fn ecs_run_post_frame(world: *world_t, action: fini_action_t, ctx: ?*anyo
 pub inline fn quit(world: *World) void {
     ecs_quit(world.world_ptr);
 }
-extern fn ecs_quit(world: *world_t) void;
+pub extern fn ecs_quit(world: *world_t) void;
 
 /// `pub fn should_quit(world: *const world_t) bool`
 pub inline fn should_quit(world: *const World) bool {
@@ -2036,7 +2036,7 @@ extern fn ecs_get_path_w_sep(
     child: entity_t,
     sep: ?[*:0]const u8,
     prefix: ?[*:0]const u8,
-) ?[*]u8;
+) ?[*:0]u8;
 
 /// ```
 /// pub fn ecs_get_path_w_sep_buf(
@@ -2767,6 +2767,30 @@ pub fn COMPONENT(world: *world_t, comptime T: type) void {
                     }.dtor else null,
                     else => null,
                 },
+                .ctor = switch (@typeInfo(T)) {
+                    .@"struct" => if (@hasDecl(T, "ctor")) struct {
+                        pub fn ctor(ptr: *anyopaque, _: i32, _: *const type_info_t) callconv(.c) void {
+                            T.ctor(@as(*T, @ptrCast(@alignCast(ptr))));
+                        }
+                    }.ctor else null,
+                    else => null,
+                },
+                .move_ctor = switch (@typeInfo(T)) {
+                    .@"struct" => if (@hasDecl(T, "move_ctor")) struct {
+                        pub fn move_ctor(ptr: *anyopaque, _: i32, _: *const type_info_t) callconv(.c) void {
+                            T.move_ctor(@as(*T, @ptrCast(@alignCast(ptr))));
+                        }
+                    }.move_ctor else null,
+                    else => null,
+                },
+                .copy_ctor = switch (@typeInfo(T)) {
+                    .@"struct" => if (@hasDecl(T, "copy_ctor")) struct {
+                        pub fn copy_ctor(ptr: *anyopaque, _: i32, _: *const type_info_t) callconv(.c) void {
+                            T.copy_ctor(@as(*T, @ptrCast(@alignCast(ptr))));
+                        }
+                    }.copy_ctor else null,
+                    else => null,
+                },
             },
         },
     });
@@ -2823,7 +2847,7 @@ pub inline fn observer(
 
 }
 pub fn OBSERVER(
-    world: *world_t,
+    world: *World,
     name: [*:0]const u8,
     observer_desc: *observer_desc_t,
 ) entity_t {
@@ -2831,8 +2855,8 @@ pub fn OBSERVER(
     entity_desc.id = new_id(world);
     entity_desc.name = name;
 
-    observer_desc.entity = entity_init(world, &entity_desc);
-    return observer_init(world, observer_desc);
+    observer_desc.entity = entity_init(world.world_ptr, &entity_desc);
+    return observer_init(world.world_ptr, observer_desc);
 }
 
 /// Implements a flecs system from function parameters.
@@ -2943,7 +2967,7 @@ pub fn ADD_SYSTEM_WITH_FILTERS(
     return SYSTEM(world, name, phase, &desc);
 }
 
-pub fn new_entity(world: *World, name: [*:0]const u8) entity_t {
+pub fn new_entity(world: *World, name: ?[*:0]const u8) entity_t {
     return entity_init(world.world_ptr, &.{ .name = name });
 }
 
@@ -3072,20 +3096,20 @@ pub fn cast_mut(comptime T: type, val: ?*anyopaque) *T {
     return @as(*T, @ptrCast(@alignCast(val)));
 }
 
-pub fn singleton_set(world: World, comptime T: type, val: T) entity_t {
-    return set(world.world_ptr, id(T), T, val);
+pub fn singleton_set(world: *World, comptime T: type, val: T) entity_t {
+    return set(world, id(T), T, val);
 }
 
-pub fn singleton_get(world: World, comptime T: type) ?*const T {
-    return get(world.world_ptr, id(T), T);
+pub fn singleton_get(world: *World, comptime T: type) ?*const T {
+    return get(world, id(T), T);
 }
 
-pub fn singleton_get_mut(world: World, comptime T: type) ?*T {
-    return get_mut(world.world_ptr, id(T), T);
+pub fn singleton_get_mut(world: *World, comptime T: type) ?*T {
+    return get_mut(world, id(T), T);
 }
 
-pub fn singleton_add(world: World, comptime T: type) void {
-    add(world.world_ptr, id(T), T);
+pub fn singleton_add(world: *World, comptime T: type) void {
+    add(world, id(T), T);
 }
 
 pub fn singleton_remove(world: World, comptime T: type) void {
@@ -3106,8 +3130,11 @@ pub fn lookup_fullpath(world: *const World, path: []const u8) entity_t {
     return ecs_lookup_path_w_sep(world.world_ptr, 0, path, ".", null, true);
 }
 
-pub fn get_path(world: *const World, parent: entity_t, child: entity_t) []const u8 {
-    return ecs_get_path_w_sep(world.world_ptr, parent, child, ".", null);
+pub fn get_path(world: *const World, parent: entity_t, child: entity_t) ?[]const u8 {
+    const r = ecs_get_path_w_sep(world.world_ptr, parent, child, ".", null);
+
+    if (r == null) return null;
+    return std.mem.span(r.?);
 }
 
 pub fn get_fullpath(world: *const World, child: entity_t) []u8 {
