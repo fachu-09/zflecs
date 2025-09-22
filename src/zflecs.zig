@@ -547,7 +547,7 @@ pub const system_desc_t = extern struct {
 
 /// `pub fn system_init(world: *world_t, desc: *const system_desc_t) entity_t`
 pub inline fn system_init(self: *const World, desc: *const system_desc_t) entity_t {
-    return ecs_system_init(self.world_t, desc);
+    return ecs_system_init(self.world_ptr, desc);
 }
 extern fn ecs_system_init(world: *world_t, desc: *const system_desc_t) entity_t;
 
@@ -919,6 +919,9 @@ pub const commands_t = extern struct {
 // allocator_t, vec_t, map_t, switch_node
 //
 //--------------------------------------------------------------------------------------------------
+
+
+
 pub const vec_t = extern struct {
     array: ?*anyopaque,
     count: i32,
@@ -2791,6 +2794,14 @@ pub fn COMPONENT(world: *world_t, comptime T: type) void {
                     }.copy_ctor else null,
                     else => null,
                 },
+                .on_set = switch (@typeInfo(T)) {
+                    .@"struct" => if (@hasDecl(T, "on_set")) struct {
+                        pub fn on_set(it: *iter_t) callconv(.c) void {
+                            T.on_set(it);
+                        }
+                    }.copy_ctor else null,
+                    else => null,
+                },
             },
         },
     });
@@ -3360,7 +3371,7 @@ pub fn import(world: *World, comptime module: type) entity_t {
     const old_name_prefix = world_info.name_prefix;
 
     const path = flecs_module_path_from_c(@typeName(module));
-    defer EcsAllocator.free(@constCast(path));
+    //defer EcsAllocator.free(@constCast(path));
     var e = ecs_lookup(world.world_ptr, path);
     if (e == 0) {
         // Load module
