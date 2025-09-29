@@ -1273,7 +1273,7 @@ pub const query_group_info = extern struct {
     ctx: ?*anyopaque,
 };
 
-const EcsAllocator = struct {
+pub const EcsAllocator = struct {
     const AllocationHeader = struct {
         size: usize,
     };
@@ -1281,7 +1281,7 @@ const EcsAllocator = struct {
     const Alignment = 16;
 
     var gpa: ?std.heap.GeneralPurposeAllocator(.{}) = null;
-    var allocator: ?std.mem.Allocator = null;
+    pub var allocator: ?std.mem.Allocator = null;
 
     fn alloc(size: i32) callconv(.c) ?*anyopaque {
         if (size < 0) {
@@ -2794,12 +2794,28 @@ pub fn COMPONENT(world: *world_t, comptime T: type) void {
                     }.copy_ctor else null,
                     else => null,
                 },
+                .move = switch (@typeInfo(T)) {
+                    .@"struct" => if (@hasDecl(T, "move")) struct {
+                        pub fn move(dst: *anyopaque, src: *anyopaque,_: i32, _: *const type_info_t) callconv(.c) void {
+                            T.move(@as(*T, @ptrCast(@alignCast(dst))),@as(*T, @ptrCast(@alignCast(src))));
+                        }
+                    }.move else null,
+                    else => null,
+                },
                 .on_set = switch (@typeInfo(T)) {
                     .@"struct" => if (@hasDecl(T, "on_set")) struct {
                         pub fn on_set(it: *iter_t) callconv(.c) void {
                             T.on_set(it);
                         }
-                    }.copy_ctor else null,
+                    }.on_set else null,
+                    else => null,
+                },
+                .on_remove = switch (@typeInfo(T)) {
+                    .@"struct" => if (@hasDecl(T, "on_remove")) struct {
+                        pub fn on_remove(it: *iter_t) callconv(.c) void {
+                            T.on_remove(it);
+                        }
+                    }.on_remove else null,
                     else => null,
                 },
             },
@@ -2854,20 +2870,20 @@ pub inline fn observer(
     name: []const u8,
     observer_desc: *observer_desc_t
 ) entity_t {
-    return OBSERVER(world.world_ptr, std.fmt.comptimePrint("{}", .{name}), observer_desc);
+    return OBSERVER(world.world_ptr, std.fmt.comptimePrint("{s}", .{name}), observer_desc);
 
 }
 pub fn OBSERVER(
-    world: *World,
+    world: *world_t,
     name: [*:0]const u8,
     observer_desc: *observer_desc_t,
 ) entity_t {
     var entity_desc = entity_desc_t{};
-    entity_desc.id = new_id(world);
+    entity_desc.id = ecs_new(world);
     entity_desc.name = name;
 
-    observer_desc.entity = entity_init(world.world_ptr, &entity_desc);
-    return observer_init(world.world_ptr, observer_desc);
+    observer_desc.entity = entity_init(world, &entity_desc);
+    return observer_init(world, observer_desc);
 }
 
 /// Implements a flecs system from function parameters.
